@@ -403,6 +403,8 @@ func floatNumber(v reflect.Value) float64 {
 	switch v.Kind() {
 	case reflect.Float32, reflect.Float64:
 		return v.Float()
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return float64(v.Uint())
 	default:
 		return float64(v.Int())
 	}
@@ -410,7 +412,9 @@ func floatNumber(v reflect.Value) float64 {
 
 func isNumberValue(v reflect.Value) bool {
 	switch v.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Float32, reflect.Float64:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
 		return true
 	default:
 		return false
@@ -419,7 +423,9 @@ func isNumberValue(v reflect.Value) bool {
 
 func convertToNumber(v reflect.Value) (reflect.Value, bool) {
 	switch v.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Float32, reflect.Float64:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
 		return v, true
 	case reflect.String:
 		if n, err := strconv.ParseFloat(v.String(), 64); err == nil {

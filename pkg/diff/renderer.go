@@ -60,6 +60,9 @@ func (r *Renderer) Render(ns Nodes) string {
 	if len(ns) == 0 {
 		return ""
 	}
+	if r == nil {
+		r = &Renderer{}
+	}
 
 	var prePath []PathStep
 	var b strings.Builder
@@ -74,13 +77,34 @@ func (r *Renderer) Render(ns Nodes) string {
 			nl = false
 		}
 
+		pad := depth*2 - 1
+		if pad < 0 {
+			pad = 0
+		}
+
 		switch {
 		case lastStep.Type == SliceIndexPathStep:
-			fmt.Fprintf(&b, "%s%*s- ", mark, depth*2-1, "")
+			fmt.Fprintf(&b, "%s%*s- ", mark, pad, "")
 		case nl:
-			fmt.Fprintf(&b, "%s%*s%s:\n", mark, depth*2-1, "", lastStep.String())
+			if lastStep.String() == "" {
+				if pad > 0 {
+					fmt.Fprintf(&b, "%s%*s\n", mark, pad, "")
+				} else {
+					fmt.Fprintf(&b, "%s\n", mark)
+				}
+			} else {
+				fmt.Fprintf(&b, "%s%*s%s:\n", mark, pad, "", lastStep.String())
+			}
 		default:
-			fmt.Fprintf(&b, "%s%*s%s: ", mark, depth*2-1, "", lastStep.String())
+			if lastStep.String() == "" {
+				if pad > 0 {
+					fmt.Fprintf(&b, "%s%*s ", mark, pad, "")
+				} else {
+					fmt.Fprintf(&b, "%s ", mark)
+				}
+			} else {
+				fmt.Fprintf(&b, "%s%*s%s: ", mark, pad, "", lastStep.String())
+			}
 		}
 
 		parts := strings.Split(nodeString, "\n")
@@ -102,9 +126,23 @@ func (r *Renderer) Render(ns Nodes) string {
 	}
 
 	for _, n := range ns {
+		pathLen := len(n.Path)
+		if pathLen == 0 {
+			valueX, valueY := n.ValueX, n.ValueY
+			if r.maskPathPrefix != "" && strings.HasPrefix(n.PathString, r.maskPathPrefix) {
+				valueX = reflect.ValueOf(maskString)
+				valueY = reflect.ValueOf(maskString)
+			}
+
+			fmt.Fprintf(&b, "%*s#%s\n", r.leftPadding*2, "", n.PathString)
+			printValue("-", valueX, PathStep{}, r.leftPadding)
+			printValue("+", valueY, PathStep{}, r.leftPadding)
+			b.WriteString("\n")
+			continue
+		}
+
 		duplicateDepth := pathDuplicateDepth(n.Path, prePath)
 		prePath = n.Path
-		pathLen := len(n.Path)
 
 		var array bool
 		for i := duplicateDepth; i < pathLen-1; i++ {
@@ -153,6 +191,10 @@ func pathDuplicateDepth(x, y []PathStep) int {
 }
 
 func renderNodeValue(v reflect.Value, prefix string) (string, bool) {
+	if !v.IsValid() {
+		return "", false
+	}
+
 	switch v.Kind() {
 	case reflect.Map:
 		out := make([]string, 0, v.Len())
@@ -190,15 +232,20 @@ func renderNodeValue(v reflect.Value, prefix string) (string, bool) {
 		}
 		return strings.Join(out, "\n"), true
 
-	case reflect.Interface:
+	case reflect.Interface, reflect.Pointer:
+		if v.IsNil() {
+			return "", false
+		}
 		return renderNodeValue(v.Elem(), prefix)
 
 	case reflect.String:
 		return v.String(), false
 
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return strconv.FormatInt(v.Int(), 10), false
+
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return strconv.FormatUint(v.Uint(), 10), false
 
 	case reflect.Float32, reflect.Float64:
 		return strconv.FormatFloat(v.Float(), 'f', -1, 64), false
@@ -212,16 +259,31 @@ func renderNodeValue(v reflect.Value, prefix string) (string, bool) {
 }
 
 func RenderPrimitiveValue(v reflect.Value) string {
+	if !v.IsValid() {
+		return ""
+	}
+
 	switch v.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		if v.IsNil() {
+			return ""
+		}
+		return RenderPrimitiveValue(v.Elem())
+
 	case reflect.String:
 		return v.String()
 
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return strconv.FormatInt(v.Int(), 10)
+
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return strconv.FormatUint(v.Uint(), 10)
 
 	case reflect.Float32, reflect.Float64:
 		return strconv.FormatFloat(v.Float(), 'f', -1, 64)
+
+	case reflect.Bool:
+		return strconv.FormatBool(v.Bool())
 
 	default:
 		return v.String()
@@ -250,6 +312,10 @@ func RenderByCommand(command string, old, new any) ([]byte, error) {
 	}
 	defer os.Remove(oldFile.Name())
 	if _, err := oldFile.Write(oldBytes); err != nil {
+		oldFile.Close()
+		return nil, err
+	}
+	if err := oldFile.Close(); err != nil {
 		return nil, err
 	}
 
@@ -259,6 +325,10 @@ func RenderByCommand(command string, old, new any) ([]byte, error) {
 	}
 	defer os.Remove(newFile.Name())
 	if _, err := newFile.Write(newBytes); err != nil {
+		newFile.Close()
+		return nil, err
+	}
+	if err := newFile.Close(); err != nil {
 		return nil, err
 	}
 

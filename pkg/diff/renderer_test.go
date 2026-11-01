@@ -80,6 +80,24 @@ func TestRenderNodeValue(t *testing.T) {
 			expected: "false",
 		},
 		{
+			name:     "uint value",
+			value:    reflect.ValueOf(uint(42)),
+			expected: "42",
+		},
+		{
+			name:     "uint64 value",
+			value:    reflect.ValueOf(uint64(18446744073709551615)),
+			expected: "18446744073709551615",
+		},
+		{
+			name: "pointer value",
+			value: func() reflect.Value {
+				v := 123
+				return reflect.ValueOf(&v)
+			}(),
+			expected: "123",
+		},
+		{
 			name: "slice of primitive elements",
 			value: func() reflect.Value {
 				v := []int{1, 2, 3}
@@ -206,6 +224,34 @@ func TestRenderPrimitiveValue(t *testing.T) {
 			name:     "float",
 			value:    1.25,
 			expected: "1.25",
+		},
+		{
+			name:     "uint",
+			value:    uint(42),
+			expected: "42",
+		},
+		{
+			name:     "uint64",
+			value:    uint64(18446744073709551615),
+			expected: "18446744073709551615",
+		},
+		{
+			name:     "bool true",
+			value:    true,
+			expected: "true",
+		},
+		{
+			name:     "bool false",
+			value:    false,
+			expected: "false",
+		},
+		{
+			name: "pointer",
+			value: func() *int {
+				v := 456
+				return &v
+			}(),
+			expected: "456",
 		},
 		{
 			name: "map",
@@ -357,4 +403,27 @@ func TestRenderByCommand(t *testing.T) {
 			assert.Equal(t, tc.expectedDiff, string(actual))
 		})
 	}
+}
+
+func TestRenderer_Render(t *testing.T) {
+	t.Run("nil renderer does not panic", func(t *testing.T) {
+		var r *Renderer
+		out := r.Render(nil)
+		assert.Equal(t, "", out)
+	})
+
+	t.Run("root-level diff with empty path does not panic", func(t *testing.T) {
+		r := NewRenderer()
+		nodes := Nodes{
+			{
+				Path:       nil,
+				PathString: "",
+				ValueX:     reflect.ValueOf("old-val"),
+				ValueY:     reflect.ValueOf("new-val"),
+			},
+		}
+		out := r.Render(nodes)
+		assert.Contains(t, out, "- old-val")
+		assert.Contains(t, out, "+ new-val")
+	})
 }

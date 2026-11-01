@@ -605,3 +605,83 @@ func TestIsEmptyInterface(t *testing.T) {
 		})
 	}
 }
+
+func TestDiff_Uint(t *testing.T) {
+	testcases := []struct {
+		name    string
+		old     unstructured.Unstructured
+		new     unstructured.Unstructured
+		options []Option
+		diffNum int
+	}{
+		{
+			name: "identical uints have no diff",
+			old: unstructured.Unstructured{
+				Object: map[string]any{
+					"port": uint16(8080),
+					"uid":  uint32(1000),
+					"cnt":  uint64(5000000000),
+				},
+			},
+			new: unstructured.Unstructured{
+				Object: map[string]any{
+					"port": uint16(8080),
+					"uid":  uint32(1000),
+					"cnt":  uint64(5000000000),
+				},
+			},
+			diffNum: 0,
+		},
+		{
+			name: "differing uints report diff",
+			old: unstructured.Unstructured{
+				Object: map[string]any{
+					"port": uint16(8080),
+				},
+			},
+			new: unstructured.Unstructured{
+				Object: map[string]any{
+					"port": uint16(8443),
+				},
+			},
+			diffNum: 1,
+		},
+		{
+			name: "uint and numeric string match with WithCompareNumberAndNumericString",
+			old: unstructured.Unstructured{
+				Object: map[string]any{
+					"port": uint16(8080),
+				},
+			},
+			new: unstructured.Unstructured{
+				Object: map[string]any{
+					"port": "8080",
+				},
+			},
+			options: []Option{WithCompareNumberAndNumericString()},
+			diffNum: 0,
+		},
+		{
+			name: "uint and numeric string differ without WithCompareNumberAndNumericString",
+			old: unstructured.Unstructured{
+				Object: map[string]any{
+					"port": uint16(8080),
+				},
+			},
+			new: unstructured.Unstructured{
+				Object: map[string]any{
+					"port": "8080",
+				},
+			},
+			diffNum: 1,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := DiffUnstructureds(tc.old, tc.new, "", tc.options...)
+			require.NoError(t, err)
+			assert.Equal(t, tc.diffNum, result.NumNodes())
+		})
+	}
+}
